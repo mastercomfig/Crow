@@ -325,11 +325,11 @@ namespace crow // NOTE: Already documented in "crow/app.h"
 
         public:
             rvalue() noexcept:
-              option_{error_bit}
+              start_{nullptr}, end_{nullptr}, option_{error_bit}
             {
             }
             rvalue(type t) noexcept:
-              lsize_{}, lremain_{}, t_{t}
+              start_{nullptr}, end_{nullptr}, lsize_{}, lremain_{}, t_{t}
             {
             }
             rvalue(type t, char* s, char* e) noexcept:
@@ -759,6 +759,11 @@ namespace crow // NOTE: Already documented in "crow/app.h"
                 return (option_ & error_bit) != 0;
             }
 
+            size_t error_offset() const noexcept
+            {
+                return error() ? static_cast<size_t>(reinterpret_cast<uintptr_t>(start_)) : 0;
+            }
+
             std::vector<std::string> keys() const
             {
 #ifndef CROW_JSON_NO_ERROR_CHECK
@@ -955,7 +960,7 @@ namespace crow // NOTE: Already documented in "crow/app.h"
             struct Parser
             {
                 Parser(char* data_, size_t /*size*/):
-                  data(data_)
+                  data(data_), base(data_)
                 {
                 }
 
@@ -1328,13 +1333,21 @@ namespace crow // NOTE: Already documented in "crow/app.h"
                 {
                     ws_skip();
                     auto ret = decode_value(0); // or decode object?
-                    ws_skip();
-                    if (ret && *data != '\0')
-                        ret.set_error();
+                    if (ret)
+                    {
+                        ws_skip();
+                        if (*data != '\0')
+                            ret.set_error();
+                    }
+                    if (!ret)
+                    {
+                        ret.start_ = reinterpret_cast<char*>(static_cast<uintptr_t>(data - base));
+                    }
                     return ret;
                 }
 
                 char* data;
+                char* base;
             };
             return Parser(data, size).parse();
         }
